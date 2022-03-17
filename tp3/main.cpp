@@ -12,6 +12,7 @@
 
 
 using namespace std;
+using namespace MPI;
 
 // Inverser la matrice par la méthode de Gauss-Jordan; implantation séquentielle.
 void invertSequential(Matrix& iA) {
@@ -68,27 +69,80 @@ void invertSequential(Matrix& iA) {
 // Inverser la matrice par la méthode de Gauss-Jordan; implantation MPI parallèle.
 void invertParallel(Matrix& iA) {
     // vous devez coder cette fonction
-    MPI_Init(NULL,NULL);
-    
-    // Get the number of processes
-    int world_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI::Init();
 
-    // Get the rank of the process
-    int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    int lSize = MPI::COMM_WORLD.Get_size();
+    int lRank = MPI::COMM_WORLD.Get_rank();
+    if (lRank == 0) {
+    cout << "Dimension du monde = " << lSize << endl;
+    }
+    cout << "Bonjour le monde, je suis le processus " << lRank << endl;
 
-    // Get the name of the processor
-    char processor_name[MPI_MAX_PROCESSOR_NAME];
-    int name_len;
-    MPI_Get_processor_name(processor_name, &name_len);
+    MPI::Finalize();
 
-    // Print off a hello world message
-    printf("Hello world from processor %s, rank %d out of %d processors\n",
-           processor_name, world_rank, world_size);
+    // //DEBUT DE REFLEXION
+    // // vérifier que la matrice est carrée
+    // assert(iA.rows() == iA.cols());
+    // // construire la matrice [A I]
+    // MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
 
-    MPI_Finalize();
+    // MPI::Init();
+    // int lRank = COMM_WORLD.Get_rank();
+    // int lSize = COMM_WORLD.Get_size();
 
+    // // traiter chaque rangée (répartition entre processus par i%lSize=lRang)
+    // for (size_t k=lRank; k<iA.rows(); k+=lSize) {
+    //     // trouver l'index p du plus grand pivot de la colonne k en valeur absolue
+    //     // (pour une meilleure stabilité numérique).
+    //     size_t p = k;
+    //     double lMax = fabs(lAI(k,k));
+    //     for(size_t i = k; i < lAI.rows(); i+=lSize) {
+    //         if(fabs(lAI(i,k)) > lMax) {
+    //             lMax = fabs(lAI(i,k));
+    //             p = i;
+    //         }
+    //     }
+        
+    //     //REDUCTION (f=Max) DES p DE CHAQUE PROCESSUS 
+
+    //     //FAIRE LA VERIFICATION QU'UNE FOIS
+    //     // vérifier que la matrice n'est pas singulière
+    //     if (lAI(p, k) == 0) throw runtime_error("Matrix not invertible");
+
+    //     //BROADCAST p
+
+    //     //lRang1==p%lSize ENVOIE la ligne p à lRang2==k%lSize et inversement
+    //     //CAS si lRang1==lRang2
+    //     // échanger la ligne courante avec celle du pivot
+    //     if (p != k) lAI.swapRows(p, k);
+        
+    //     //Si lRang==lRang2
+    //     double lValue = lAI(k, k);
+    //     for (size_t j=0; j<lAI.cols(); ++j) {
+    //         // On divise les éléments de la rangée k
+    //         // par la valeur du pivot.
+    //         // Ainsi, lAI(k,k) deviendra égal à 1.
+    //         lAI(k, j) /= lValue;
+    //     }
+
+    //     // Pour chaque rangée...
+    //     for (size_t i=lRang; i<lAI.rows(); i+=lSize) {
+    //         if (i != k) { // ...différente de k
+    //             // On soustrait la rangée k
+    //             // multipliée par l'élément k de la rangée courante
+    //             double lValue = lAI(i, k);
+    //             lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
+    //         }
+    //     }
+        
+    // }
+
+    // // On copie la partie droite de la matrice AI ainsi transformée
+    // // dans la matrice courante (this).
+    // for (unsigned int i=lRank; i<iA.rows(); i+=lSize) {
+    //     iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
+    // }
+    // MPI::Finalize();
 }
 
 // Multiplier deux matrices.
@@ -120,16 +174,23 @@ int main(int argc, char** argv) {
     MatrixRandom lA(lS, lS);
     cout << "Matrice random:\n" << lA.str() << endl;
 
-    Matrix lB(lA);
-    invertSequential(lB);
-    cout << "Matrice inverse:\n" << lB.str() << endl;
+    // Matrix lB(lA);
+    // invertSequential(lB);
+    // cout << "Matrice inverse:\n" << lB.str() << endl;
 
-    Matrix lRes = multiplyMatrix(lA, lB);
+    // Matrix lRes = multiplyMatrix(lA, lB);
+    // cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+
+    // cout << "Erreur: " << lRes.getDataArray().sum() - lS << endl;
+
+    Matrix lC(lA);
+    invertParallel(lC);
+    cout << "Matrice inverse:\n" << lC.str() << endl;
+
+    Matrix lRes = multiplyMatrix(lA, lC);
     cout << "Produit des deux matrices:\n" << lRes.str() << endl;
 
     cout << "Erreur: " << lRes.getDataArray().sum() - lS << endl;
-
-    invertParallel(lB);
 
     return 0;
 }

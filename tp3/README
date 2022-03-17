@@ -9,4 +9,7 @@ exécutez les commandes suivantes:
 Assurez-vous au préalable que la commande cmake est installée sur 
 votre machine.
 
+Execution :
+mpirun -np <nombreProcessus> tp3 <n> 
+
 Source : https://github.com/ghazpar/PPD-H22
