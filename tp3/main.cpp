@@ -112,6 +112,17 @@ void invertParallel(Matrix& iA) {
     int lSize = COMM_WORLD.Get_size();
     
     mpi_double_int gMax;
+
+    double pMatrix[iA.rows()/lSize*lAI.cols()];
+    for (int n=0;n<lAI.rows()/lSize;n++){
+        MPI_Scatter(&lAI(n,0),lAI.cols(),MPI_DOUBLE,&pMatrix[n*lAI.cols()],lAI.cols(),MPI_DOUBLE,0,COMM_WORLD);
+    }
+    MPI_Barrier(COMM_WORLD);
+    for (int i=0; i<sizeof(pMatrix)/sizeof(double);i++){
+        cout << lRank << " : " << pMatrix[i] << endl;
+    }
+    MPI_Barrier(COMM_WORLD);
+
     // traiter chaque rangée (répartition entre processus par i%lSize=lRang)
     for (size_t k=0; k<iA.rows(); k++) {
         // trouver l'index p du plus grand pivot de la colonne k en valeur absolue
@@ -137,7 +148,7 @@ void invertParallel(Matrix& iA) {
 
         //FAIRE LA VERIFICATION QU'UNE FOIS
         if(lRank==gMax.location%lSize){
-            cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
+            //cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
             // vérifier que la matrice n'est pas singulière
             if (lAI(gMax.location, k) == 0) throw runtime_error("Matrix not invertible");
             // échanger la ligne courante avec celle du pivot
@@ -165,23 +176,24 @@ void invertParallel(Matrix& iA) {
                 lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
             }
         }
+
+        MPI_Barrier(COMM_WORLD);
         
     }
 
-    MPI_Barrier(COMM_WORLD);
 
     // On copie la partie droite de la matrice AI ainsi transformée
     // dans la matrice courante (this).
-    // for (unsigned int i=lRank; i<iA.rows(); i+=lSize) {
-    //     iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
-    // }
+    for (unsigned int i=lRank; i<iA.rows(); i+=lSize) {
+        iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
+    }
         // On copie la partie droite de la matrice AI ainsi transformée
     // dans la matrice courante (this).
-    if (lRank==0){
-        for (unsigned int i=0; i<iA.rows(); ++i) {
-            iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
-        }
-    }
+    // if (lRank==0){
+    //     for (unsigned int i=0; i<iA.rows(); ++i) {
+    //         iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
+    //     }
+    // }
     
 
 }
