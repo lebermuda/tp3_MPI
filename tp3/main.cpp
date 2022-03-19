@@ -112,17 +112,15 @@ void invertParallel(Matrix& iA) {
     int lSize = COMM_WORLD.Get_size();
     
     mpi_double_int gMax;
+    Matrix pMatrix(lAI.rows()/lSize+1,lAI.cols());
 
-    double pMatrix[iA.rows()/lSize*lAI.cols()];
-    for (int n=0;n<lAI.rows()/lSize;n++){
-        MPI_Scatter(&lAI(n,0),lAI.cols(),MPI_DOUBLE,&pMatrix[n*lAI.cols()],lAI.cols(),MPI_DOUBLE,0,COMM_WORLD);
+    int k = 0;
+    while (k*lSize+lRank<lAI.rows()){
+        pMatrix.getRowSlice(k)=lAI.getRowCopy(k*lSize+lRank);
+        k++;
     }
-    MPI_Barrier(COMM_WORLD);
-    for (int i=0; i<sizeof(pMatrix)/sizeof(double);i++){
-        cout << lRank << " : " << pMatrix[i] << endl;
-    }
-    MPI_Barrier(COMM_WORLD);
-
+    // cout << lRank <<" :\n" << pMatrix.str() << endl;
+    
     // traiter chaque rangée (répartition entre processus par i%lSize=lRang)
     for (size_t k=0; k<iA.rows(); k++) {
         // trouver l'index p du plus grand pivot de la colonne k en valeur absolue
@@ -130,17 +128,17 @@ void invertParallel(Matrix& iA) {
         
         // cout << "   COLONE " << k <<endl;
 
-        size_t p_loc = k+lRank;
         mpi_double_int lMax;
         lMax.value=0;
-        lMax.location = (int) p_loc;
+        lMax.location = (int) k+lRank;
 
-        for(size_t i = p_loc; i < lAI.rows(); i+=lSize) {
-            if(fabs(lAI(i,k)) > lMax.value) {
-                lMax.value = fabs(lAI(i,k));
-                lMax.location = (int) i;
+        for(size_t i = lMax.location/lSize; i < pMatrix.rows(); i++) {
+            if(fabs(pMatrix(i,k)) > lMax.value) {
+                lMax.value = fabs(pMatrix(i,k));
+                lMax.location = (int) i*lSize+lRank;
             }
-            // cout << "Ligne "<<i<<" par p="<<lRank<<endl;
+
+            //  cout << "Ligne "<<i<<" par p="<<lRank<<endl;
         }
         
         // REDUCTION (f=Max) DES p DE CHAQUE PROCESSUS 
@@ -148,12 +146,19 @@ void invertParallel(Matrix& iA) {
 
         //FAIRE LA VERIFICATION QU'UNE FOIS
         if(lRank==gMax.location%lSize){
-            //cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
+            cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
             // vérifier que la matrice n'est pas singulière
             if (lAI(gMax.location, k) == 0) throw runtime_error("Matrix not invertible");
             // échanger la ligne courante avec celle du pivot
-            if (gMax.location != k) lAI.swapRows(gMax.location, k);
-            
+            if (gMax.location != k) {
+                if (gMax.location%lSize!=lRank%lSize){
+                    //SENDRECV
+                }
+                else{
+                    pMatrix.swapRows(gMax.location/lSize, k/lSize);
+                }
+            }
+
             double lValue = lAI(k, k);
             for (size_t j=0; j<lAI.cols(); ++j) {
                 // On divise les éléments de la rangée k
