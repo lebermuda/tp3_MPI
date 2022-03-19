@@ -113,11 +113,13 @@ void invertParallel(Matrix& iA) {
     
     mpi_double_int gMax;
     Matrix pMatrix(lAI.rows()/lSize+1,lAI.cols());
+    double rowPivot[pMatrix.cols()];
 
-    int k = 0;
-    while (k*lSize+lRank<lAI.rows()){
-        pMatrix.getRowSlice(k)=lAI.getRowCopy(k*lSize+lRank);
-        k++;
+    //REPARTITION DES LIGNES ENTRE p PROCESSUS
+    int u = 0;
+    while (u*lSize+lRank<lAI.rows()){
+        pMatrix.getRowSlice(u)=lAI.getRowCopy(u*lSize+lRank);
+        u++;
     }
     // cout << lRank <<" :\n" << pMatrix.str() << endl;
     
@@ -127,7 +129,8 @@ void invertParallel(Matrix& iA) {
         // (pour une meilleure stabilité numérique).
         
         // cout << "   COLONE " << k <<endl;
-
+        
+        //PIVOT MAX LOCAL
         mpi_double_int lMax;
         lMax.value=0;
         lMax.location = (int) k+lRank;
@@ -137,68 +140,78 @@ void invertParallel(Matrix& iA) {
                 lMax.value = fabs(pMatrix(i,k));
                 lMax.location = (int) i*lSize+lRank;
             }
-
-            //  cout << "Ligne "<<i<<" par p="<<lRank<<endl;
         }
         
-        // REDUCTION (f=Max) DES p DE CHAQUE PROCESSUS 
+        // PIVOT MAX GLOBAL 
         MPI_Allreduce(&lMax,&gMax,1,MPI_DOUBLE_INT,MPI_MAXLOC,COMM_WORLD);
 
-        //FAIRE LA VERIFICATION QU'UNE FOIS
         if(lRank==gMax.location%lSize){
-            cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
+            // cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
             // vérifier que la matrice n'est pas singulière
             if (lAI(gMax.location, k) == 0) throw runtime_error("Matrix not invertible");
             // échanger la ligne courante avec celle du pivot
+            double lValue = pMatrix(gMax.location/lSize,k);
+            for (int i=0;i<pMatrix.cols();i++){
+                pMatrix(gMax.location/lSize,i)/=lValue;
+                rowPivot[i]=pMatrix(gMax.location/lSize,i);
+            }
+            MPI_Bcast(&rowPivot, pMatrix.cols(), MPI_DOUBLE, gMax.location%lSize, COMM_WORLD);
+            // cout<<k<<lRank<< " Envoie [ "<<rowPivot[0]<<", "<<rowPivot[1]<<", "<<rowPivot[2]<<", "<<rowPivot[3]<<", "<<rowPivot[4]<<", "<<rowPivot[5]<<", "<<rowPivot[6]<<", "<<rowPivot[7]<<", "<<rowPivot[8]<<" ]"<<endl;
+            
+            //SWAP de ligne k et pivot max
             if (gMax.location != k) {
-                if (gMax.location%lSize!=lRank%lSize){
-                    //SENDRECV
+                if (k%lSize!=lRank){
+                    Status lStatus;
+                    COMM_WORLD.Recv(&rowPivot, pMatrix.cols(), MPI_DOUBLE, k%lSize, 1, lStatus);
+                    for (int i=0;i<pMatrix.cols();i++){
+                        pMatrix(gMax.location/lSize,i)=rowPivot[i];
+                    }
+                    // cout << pMatrix.str() <<endl;
                 }
                 else{
-                    pMatrix.swapRows(gMax.location/lSize, k/lSize);
+                    pMatrix.swapRows(gMax.location/lSize, k/lSize);                   
                 }
             }
-
-            double lValue = lAI(k, k);
-            for (size_t j=0; j<lAI.cols(); ++j) {
-                // On divise les éléments de la rangée k
-                // par la valeur du pivot.
-                // Ainsi, lAI(k,k) deviendra égal à 1.
-                lAI(k, j) /= lValue;
-            }
         }
-        MPI_Barrier(COMM_WORLD);
+        else{
+            MPI_Bcast(&rowPivot, pMatrix.cols(), MPI_DOUBLE, gMax.location%lSize, COMM_WORLD);
+            // cout<<k<<lRank<< " Recu [ "<<rowPivot[0]<<", "<<rowPivot[1]<<", "<<rowPivot[2]<<", "<<rowPivot[3]<<", "<<rowPivot[4]<<", "<<rowPivot[5]<<", "<<rowPivot[6]<<", "<<rowPivot[7]<<", "<<rowPivot[8]<<" ]"<<endl;
+        }
 
-        //BROADCAST p
-        //MPI_Bcast(&lAI(gMax.location,0), lAI.rows(), MPI_DOUBLE, gMax.location%lSize, COMM_WORLD);
+        //SWAP de ligne k et pivot max
+        if(lRank==k%lSize and k%lSize!=gMax.location%lSize){
+            COMM_WORLD.Send(&pMatrix(k,0),pMatrix.cols(),MPI_DOUBLE,gMax.location%lSize,1);
+        }
 
         // Pour chaque rangée...
-        for (size_t i=lRank; i<lAI.rows(); i+=lSize) {
-            if (i != k) { // ...différente de k
+        int i = 0;
+        while (i*lSize+lRank<pMatrix.rows()){
+            if (i*lSize+lRank != k) { // ...différente de k
                 // On soustrait la rangée k
                 // multipliée par l'élément k de la rangée courante
-                double lValue = lAI(i, k);
-                lAI.getRowSlice(i) -= lAI.getRowCopy(k)*lValue;
+                double lValue = pMatrix(i, k);
+
+                for (int j=0;j<pMatrix.cols();j++){
+                    pMatrix(i,j) -= rowPivot[j]*lValue;
+                    if (j==k){
+                        cout<<rowPivot[k]<< " : "<< lValue <<endl;
+                    }
+                }
             }
+            i++;
         }
 
-        MPI_Barrier(COMM_WORLD);
+        // MPI_Barrier(COMM_WORLD);
+        // cout << k << lRank<<" : \n" << pMatrix.str()<<endl;
+        // MPI_Barrier(COMM_WORLD);
         
     }
-
-
-    // On copie la partie droite de la matrice AI ainsi transformée
-    // dans la matrice courante (this).
-    for (unsigned int i=lRank; i<iA.rows(); i+=lSize) {
-        iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
+    
+    u = 0;
+    while (u*lSize+lRank<lAI.rows()){
+        iA.getRowSlice(u*lSize+lRank)=pMatrix.getRowCopy(u);
+        u++;
     }
-        // On copie la partie droite de la matrice AI ainsi transformée
-    // dans la matrice courante (this).
-    // if (lRank==0){
-    //     for (unsigned int i=0; i<iA.rows(); ++i) {
-    //         iA.getRowSlice(i) = lAI.getDataArray()[slice(i*lAI.cols()+iA.cols(), iA.cols(), 1)];
-    //     }
-    // }
     
 
 }
