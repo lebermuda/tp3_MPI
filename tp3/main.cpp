@@ -197,15 +197,19 @@ void invertParallel(Matrix& iA) {
                 double lValue = pMatrix(i, k);
 
                 for (int j=0;j<pMatrix.cols();j++){
+                    if(j<k){
+                        cout <<"k="<<k<<" , pMatrix(i="<<i<<",j="<<j<<") : "<< pMatrix(i,j) <<" ,rowPivot(j) : "<< rowPivot[j]<<" , lValue " << lValue << endl;
+                    }
                     pMatrix(i,j) -= rowPivot[j]*lValue;
+
                 }
             }
             i++;
         }
 
-        MPI_Barrier(COMM_WORLD);
-        cout << k << lRank<<" : \n" << pMatrix.str()<<endl;
-        MPI_Barrier(COMM_WORLD);
+        // MPI_Barrier(COMM_WORLD);
+        // cout << k << lRank<<" : \n" << pMatrix.str()<<endl;
+        // MPI_Barrier(COMM_WORLD);
         
     }
     
