@@ -148,23 +148,24 @@ void invertParallel(Matrix& iA) {
         if(lRank==gMax.location%lSize){
             // cout << "pivot "<<k<<" " <<gMax.location<<" : "<<gMax.value << endl;
             // vérifier que la matrice n'est pas singulière
-            if (lAI(gMax.location, k) == 0) throw runtime_error("Matrix not invertible");
+            if (pMatrix(gMax.location/lSize, k) == 0) throw runtime_error("Matrix not invertible");
             // échanger la ligne courante avec celle du pivot
             double lValue = pMatrix(gMax.location/lSize,k);
-            for (int i=0;i<pMatrix.cols();i++){
-                pMatrix(gMax.location/lSize,i)/=lValue;
-                rowPivot[i]=pMatrix(gMax.location/lSize,i);
+            for (int j=0;j<pMatrix.cols();j++){
+                pMatrix(gMax.location/lSize,j)/=lValue;
+                rowPivot[j]=pMatrix(gMax.location/lSize,j);
             }
             MPI_Bcast(&rowPivot, pMatrix.cols(), MPI_DOUBLE, gMax.location%lSize, COMM_WORLD);
             // cout<<k<<lRank<< " Envoie [ "<<rowPivot[0]<<", "<<rowPivot[1]<<", "<<rowPivot[2]<<", "<<rowPivot[3]<<", "<<rowPivot[4]<<", "<<rowPivot[5]<<", "<<rowPivot[6]<<", "<<rowPivot[7]<<", "<<rowPivot[8]<<" ]"<<endl;
-            
+
             //SWAP de ligne k et pivot max
             if (gMax.location != k) {
                 if (k%lSize!=lRank){
                     Status lStatus;
-                    COMM_WORLD.Recv(&rowPivot, pMatrix.cols(), MPI_DOUBLE, k%lSize, 1, lStatus);
-                    for (int i=0;i<pMatrix.cols();i++){
-                        pMatrix(gMax.location/lSize,i)=rowPivot[i];
+                    double swapRow[pMatrix.cols()];
+                    COMM_WORLD.Recv(&swapRow, pMatrix.cols(), MPI_DOUBLE, k%lSize, 1, lStatus);
+                    for (int j=0;j<pMatrix.cols();j++){
+                        pMatrix(gMax.location/lSize,j)=swapRow[j];
                     }
                     // cout << pMatrix.str() <<endl;
                 }
@@ -175,17 +176,21 @@ void invertParallel(Matrix& iA) {
         }
         else{
             MPI_Bcast(&rowPivot, pMatrix.cols(), MPI_DOUBLE, gMax.location%lSize, COMM_WORLD);
-            // cout<<k<<lRank<< " Recu [ "<<rowPivot[0]<<", "<<rowPivot[1]<<", "<<rowPivot[2]<<", "<<rowPivot[3]<<", "<<rowPivot[4]<<", "<<rowPivot[5]<<", "<<rowPivot[6]<<", "<<rowPivot[7]<<", "<<rowPivot[8]<<" ]"<<endl;
+            
+            //SWAP de ligne k et pivot max
+            if(lRank==k%lSize){
+                COMM_WORLD.Send(&pMatrix(k,0),pMatrix.cols(),MPI_DOUBLE,gMax.location%lSize,1);
+                for (int j=0;j<pMatrix.cols();j++){
+                    pMatrix(k/lSize,j)=rowPivot[j];
+                }
+            }
         }
 
-        //SWAP de ligne k et pivot max
-        if(lRank==k%lSize and k%lSize!=gMax.location%lSize){
-            COMM_WORLD.Send(&pMatrix(k,0),pMatrix.cols(),MPI_DOUBLE,gMax.location%lSize,1);
-        }
+        MPI_Barrier(COMM_WORLD);
 
         // Pour chaque rangée...
         int i = 0;
-        while (i*lSize+lRank<pMatrix.rows()){
+        while (i*lSize+lRank<lAI.rows()){
             if (i*lSize+lRank != k) { // ...différente de k
                 // On soustrait la rangée k
                 // multipliée par l'élément k de la rangée courante
@@ -193,23 +198,22 @@ void invertParallel(Matrix& iA) {
 
                 for (int j=0;j<pMatrix.cols();j++){
                     pMatrix(i,j) -= rowPivot[j]*lValue;
-                    if (j==k){
-                        cout<<rowPivot[k]<< " : "<< lValue <<endl;
-                    }
                 }
             }
             i++;
         }
 
-        // MPI_Barrier(COMM_WORLD);
-        // cout << k << lRank<<" : \n" << pMatrix.str()<<endl;
-        // MPI_Barrier(COMM_WORLD);
+        MPI_Barrier(COMM_WORLD);
+        cout << k << lRank<<" : \n" << pMatrix.str()<<endl;
+        MPI_Barrier(COMM_WORLD);
         
     }
     
     u = 0;
     while (u*lSize+lRank<lAI.rows()){
-        iA.getRowSlice(u*lSize+lRank)=pMatrix.getRowCopy(u);
+        for (int j=0;j<iA.cols();j++){
+            iA(u*lSize+lRank,j)=pMatrix(u,iA.cols()+j);
+        }
         u++;
     }
     
