@@ -76,8 +76,6 @@ void invertSequential2(Matrix& iA) {
 
     assert(iA.rows() == iA.cols());
 
-    MPI_Barrier(COMM_WORLD);
-
     MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
 
     int lRank = COMM_WORLD.Get_rank();
@@ -148,6 +146,8 @@ void FindPivot(Matrix& pMatrix, int lRank, const size_t& k, mpi_double_int& gMax
     }
 
     MPI_Allreduce(&lMax, &gMax, 1, MPI_DOUBLE_INT, MPI_MAXLOC, COMM_WORLD);
+
+    if (gMax.value == 0) throw runtime_error("Matrix not invertible");
 }
 
 void ApplyPivot(Matrix& pMatrix, int lRank, const size_t& k, double* rowPivot)
@@ -290,7 +290,6 @@ int main(int argc, char** argv) {
 
     invertParallel(lP);
     
-
     if (lRank == 0) {
         endPar = MPI::Wtime();
         //cout << "Matrice inverse:\n" << lP.str() << endl;
