@@ -13,7 +13,6 @@
 using namespace std;
 using namespace MPI;
 
-
 struct mpi_double_int {
     double value;
     int location;
@@ -63,7 +62,7 @@ void invertSequential(Matrix& iA) {
             }
         }
 
-        // cout << "Matrice " << k << ": \n" << lAI.str() << endl;
+        //cout << "Matrice " << k << ": \n" << lAI.str() << endl;
     }
 
     // On copie la partie droite de la matrice AI ainsi transformée
@@ -72,6 +71,52 @@ void invertSequential(Matrix& iA) {
         iA.getRowSlice(i) = lAI.getDataArray()[slice(i * lAI.cols() + iA.cols(), iA.cols(), 1)];
     }
 }
+
+void invertSequential2(Matrix& iA) {
+
+    assert(iA.rows() == iA.cols());
+
+    MPI_Barrier(COMM_WORLD);
+
+    MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
+
+    int lRank = COMM_WORLD.Get_rank();
+    int lSize = COMM_WORLD.Get_size();
+
+    mpi_double_int gMax;
+    Matrix pMatrix(lAI);
+    double rowPivot[pMatrix.cols()];
+
+    for (size_t k = 0; k < iA.rows(); k++) {
+        for (size_t i = k; i < pMatrix.rows(); i++) {
+            if (fabs(pMatrix(i, k)) > gMax.value) {
+                gMax.value = fabs(pMatrix(i, k));
+                gMax.location = (int)i + lRank * pMatrix.rows();
+            }
+        }
+
+        double lValue = pMatrix(gMax.location, k);
+        for (int j = 0; j < pMatrix.cols(); j++) {
+            pMatrix(gMax.location, j) /= lValue;
+            rowPivot[j] = pMatrix(gMax.location, j);
+        }
+
+        pMatrix.swapRows(k, gMax.location);
+
+        for (int i = 0; i < pMatrix.rows(); ++i) {
+            if (i != k) {
+                double lValue = pMatrix(i, k);
+
+                for (int j = 0; j < pMatrix.cols(); j++) {
+                    pMatrix(i, j) -= rowPivot[j] * lValue;
+                }
+            }
+        }
+
+        //cout << k << lRank << "\n" << pMatrix.str() << endl;
+    }
+}
+
 
 void GatherResults(int lRank, MatrixConcatCols& lAI, int lSize, Matrix& pMatrix, Matrix& iA)
 {
@@ -186,7 +231,7 @@ void invertParallel(Matrix& iA) {
 
         ApplyPivot(pMatrix, lRank, k, rowPivot);
 
-        // cout << k << lRank << "\n" << pMatrix.str() << endl;
+        //cout << k << lRank << "\n" << pMatrix.str() << endl;
     }
 
     GatherResults(lRank, lAI, lSize, pMatrix, iA);
@@ -214,16 +259,12 @@ int main(int argc, char** argv) {
     MPI::Init();
     int lRank = COMM_WORLD.Get_rank();
     int lSize = COMM_WORLD.Get_size();
-    int logMatrix = false;
 
     srand((unsigned)time(NULL));
 
-    unsigned int lS = 5;
+    unsigned int lS = 3;
     if (argc == 2) {
         lS = atoi(argv[1]);
-    }
-    if (argc == 3) {
-        logMatrix=(bool) argv[2];
     }
 
     MatrixRandom lA(lS, lS);
@@ -233,45 +274,33 @@ int main(int argc, char** argv) {
     double startSeq;
     double endSeq;
     double startPar;
+    double endPar;
 
-
+    //cout << "Matrice random:\n" << lA.str() << endl;
     if (lRank == 0) {
-        if (logMatrix){
-            cout << "Matrice random:\n" << lA.str() << endl;
-        }
-        cout << "---Sequential Start" << endl;
         startSeq = MPI::Wtime();
-        invertSequential(lC);
-        endSeq =MPI::Wtime();
-        
-        Matrix lResSeq = multiplyMatrix(lA, lC);
-        cout << "---Sequential End" << endl;
-
-        cout << "Erreur Parallel : " << lResSeq.getDataArray().sum() - lS << endl;
-        
+        invertSequential2(lC);
+        endSeq = MPI::Wtime();
     }
+
     MPI_Barrier(COMM_WORLD);
     if (lRank == 0) {
-        cout << "\n---Parallel Start" << endl;
         startPar = MPI::Wtime();
     }
 
     invertParallel(lP);
+    
 
     if (lRank == 0) {
-        double endPar=MPI::Wtime();
-        cout << "---Parallel End" << endl;
-        if (logMatrix){
-            cout << "Matrice inverse:\n" << lP.str() << endl;
-        }
+        endPar = MPI::Wtime();
+        //cout << "Matrice inverse:\n" << lP.str() << endl;
 
         Matrix lRes = multiplyMatrix(lA, lP);
-        if (logMatrix){
-            cout << "Produit des deux matrices:\n" << lRes.str() << endl;
-        }
-        cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
+        //cout << "Produit des deux matrices:\n" << lRes.str() << endl;
 
-        cout << "Time Sequential : "<< endSeq - startSeq << " , Time Parallel : "<<endPar - startPar<<endl;
+        cout << "Erreur: " << lRes.getDataArray().sum() - lS << endl;
+
+        cout << "Time Sequential : " << endSeq - startSeq << " , Time Parallel : " << endPar - startPar << endl;
     }
 
     MPI::Finalize();
