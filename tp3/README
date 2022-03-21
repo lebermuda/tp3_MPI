@@ -74,3 +74,47 @@ n=3000 : Time Parallel : 117.033
 n=3500 : Time Parallel : 187.207
 n=4000 : Time Parallel : 279.526
 
+
+    mpirun -np 1 tp3 100
+
+Erreur Parallel : -3.69482e-13
+Time Sequential : 0.0203304 , Time Parallel : 0.00890558
+
+Erreur Parallel : 7.10543e-14
+Time Sequential : 0.0233433 , Time Parallel : 0.00909198
+
+Erreur Parallel : 1.03739e-12
+Time Sequential : 0.0223488 , Time Parallel : 0.00835852
+
+    mpirun -np 2 tp3 100
+
+Erreur Parallel : -3.69482e-13
+Time Sequential : 0.0237778 , Time Parallel : 0.00479145
+
+Erreur Parallel : 2.84217e-13
+Time Sequential : 0.0216273 , Time Parallel : 0.0047225
+
+Erreur Parallel : -1.13687e-13
+Time Sequential : 0.0232691 , Time Parallel : 0.00478626
+
+    mpirun -np 3 tp3 100
+
+Erreur Parallel : -5.25802e-13
+Time Sequential : 0.0432677 , Time Parallel : 0.00773414
+
+Erreur Parallel : 5.54223e-13
+Time Sequential : 0.0243378 , Time Parallel : 0.00370034
+
+Erreur Parallel : 5.54223e-13
+Time Sequential : 0.0421017 , Time Parallel : 0.00716856
+
+    mpirun -np 4 tp3 100
+
+Erreur Parallel : -5.82645e-13
+Time Sequential : 0.0454548 , Time Parallel : 0.00576509
+
+Erreur Parallel : 1.42109e-13
+Time Sequential : 0.0240946 , Time Parallel : 0.00583282
+
+Erreur Parallel : 7.95808e-13
+Time Sequential : 0.044757 , Time Parallel : 0.00311291
