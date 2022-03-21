@@ -13,6 +13,7 @@
 using namespace std;
 using namespace MPI;
 
+
 struct mpi_double_int {
     double value;
     int location;
@@ -62,7 +63,7 @@ void invertSequential(Matrix& iA) {
             }
         }
 
-        cout << "Matrice " << k << ": \n" << lAI.str() << endl;
+        // cout << "Matrice " << k << ": \n" << lAI.str() << endl;
     }
 
     // On copie la partie droite de la matrice AI ainsi transformée
@@ -185,7 +186,7 @@ void invertParallel(Matrix& iA) {
 
         ApplyPivot(pMatrix, lRank, k, rowPivot);
 
-        cout << k << lRank << "\n" << pMatrix.str() << endl;
+        // cout << k << lRank << "\n" << pMatrix.str() << endl;
     }
 
     GatherResults(lRank, lAI, lSize, pMatrix, iA);
@@ -213,34 +214,63 @@ int main(int argc, char** argv) {
     MPI::Init();
     int lRank = COMM_WORLD.Get_rank();
     int lSize = COMM_WORLD.Get_size();
+    int logMatrix = false;
 
     srand((unsigned)time(NULL));
 
-    unsigned int lS = 3;
+    unsigned int lS = 5;
     if (argc == 2) {
         lS = atoi(argv[1]);
+    }
+    if (argc == 3) {
+        logMatrix=(bool) argv[2];
     }
 
     MatrixRandom lA(lS, lS);
     Matrix lC(lA);
     Matrix lP(lA);
 
+    double startSeq;
+    double endSeq;
+    double startPar;
+
+
     if (lRank == 0) {
-        cout << "Matrice random:\n" << lA.str() << endl;
-        cout << "Sequential Start" << endl;
+        if (logMatrix){
+            cout << "Matrice random:\n" << lA.str() << endl;
+        }
+        cout << "---Sequential Start" << endl;
+        startSeq = MPI::Wtime();
         invertSequential(lC);
-        cout << "Sequential End" << endl;
+        endSeq =MPI::Wtime();
+        Matrix lResSeq = multiplyMatrix(lA, lC);
+        cout << "---Sequential End" << endl;
+
+        cout << "Erreur Parallel : " << lResSeq.getDataArray().sum() - lS << endl;
+        
+    }
+    MPI_Barrier(COMM_WORLD);
+    if (lRank == 0) {
+        cout << "\n---Parallel Start" << endl;
+        startPar = MPI::Wtime();
     }
 
     invertParallel(lP);
 
     if (lRank == 0) {
-        cout << "Matrice inverse:\n" << lP.str() << endl;
+        double endPar=MPI::Wtime();
+        cout << "---Parallel End" << endl;
+        if (logMatrix){
+            cout << "Matrice inverse:\n" << lP.str() << endl;
+        }
 
         Matrix lRes = multiplyMatrix(lA, lP);
-        cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+        if (logMatrix){
+            cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+        }
+        cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
 
-        cout << "Erreur: " << lRes.getDataArray().sum() - lS << endl;
+        cout << "Time Sequential : "<< endSeq - startSeq << " , Time Parallel : "<<endPar - startPar<<endl;
     }
 
     MPI::Finalize();
