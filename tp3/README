@@ -10,6 +10,67 @@ Assurez-vous au préalable que la commande cmake est installée sur
 votre machine.
 
 Execution :
-mpirun -np <nombreProcessus> tp3 <n> 
+mpirun -np <nombreProcessus> tp3 <n> <true>
 
 Source : https://github.com/ghazpar/PPD-H22
+
+
+RESULTS:
+
+    mpirun -np 1 tp3 1000
+
+Erreur Parallel : 2.29079e-10
+Time Sequential : 21.0852 , Time Parallel : 11.2158
+
+Erreur Parallel : -2.33285e-10
+Time Sequential : 23.1479 , Time Parallel : 12.4576
+
+Erreur Parallel : -2.60195e-09
+Time Sequential : 23.096 , Time Parallel : 12.4421
+
+    mpirun -np 2 tp3 1000
+
+Erreur Parallel : 1.34492e-10
+Time Sequential : 23.6904 , Time Parallel : 6.98738
+
+Erreur Parallel : 5.00222e-12
+Time Sequential : 25.5234 , Time Parallel : 6.95759
+
+Erreur Parallel : -1.43245e-10
+Time Sequential : 21.9436 , Time Parallel : 7.02273
+
+    mpirun -np 3 tp3 1000
+
+Erreur Parallel : 7.95808e-11
+Time Sequential : 28.7467 , Time Parallel : 5.28954
+
+Erreur Parallel : -1.45178e-10
+Time Sequential : 27.5812 , Time Parallel : 5.31513
+
+Erreur Parallel : 3.89946e-11
+Time Sequential : 27.8845 , Time Parallel : 5.40925
+
+    mpirun -np 4 tp3 1000
+
+Erreur Parallel : -1.8872e-11
+Time Sequential : 28.9986 , Time Parallel : 4.57085
+
+Erreur Parallel : 1.77351e-11
+Time Sequential : 28.5525 , Time Parallel : 4.59266
+
+Erreur Parallel : 2.28511e-10
+Time Sequential : 28.7765 , Time Parallel : 4.56495
+
+    
+    mpirun -np 4 tp3 <n>
+
+n=100 : Time Parallel : 0.00296228
+n=500 : Time Parallel : 0.456595
+n=1000 : Time Parallel : 3.44569
+n=1500 : Time Parallel : 12.049
+n=2000 : Erreur Parallel : -8.56289e-10 , Time Parallel : 32.2725
+n=2500 : Time Parallel : 64.965
+n=3000 : Time Parallel : 117.033
+n=3500 : Time Parallel : 187.207
+n=4000 : Time Parallel : 279.526
+

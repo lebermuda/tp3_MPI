@@ -243,6 +243,7 @@ int main(int argc, char** argv) {
         startSeq = MPI::Wtime();
         invertSequential(lC);
         endSeq =MPI::Wtime();
+        
         Matrix lResSeq = multiplyMatrix(lA, lC);
         cout << "---Sequential End" << endl;
 
