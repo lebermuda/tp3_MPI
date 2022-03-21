@@ -76,8 +76,6 @@ void invertSequential2(Matrix& iA) {
 
     assert(iA.rows() == iA.cols());
 
-    MPI_Barrier(COMM_WORLD);
-
     MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
 
     int lRank = COMM_WORLD.Get_rank();
