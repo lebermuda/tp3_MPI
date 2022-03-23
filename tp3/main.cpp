@@ -283,14 +283,13 @@ int main(int argc, char** argv) {
         cout << "---Sequential Start" << endl;
         startSeq = MPI::Wtime();
         invertSequential2(lC);
-        endSeq =MPI::Wtime();
-        
+        endSeq = MPI::Wtime();
+        cout << "---Sequential End" << endl;
 
         cout << "Matrice inverse:\n" << lC.str() << endl;
         
 
         Matrix lResSeq = multiplyMatrix(lA, lC);
-        cout << "---Sequential End" << endl;
 
         cout << "Erreur Sequential : " << lResSeq.getDataArray().sum() - lS << endl;
         
