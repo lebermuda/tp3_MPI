@@ -78,40 +78,43 @@ void invertSequential2(Matrix& iA) {
 
     MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
 
-    int lRank = COMM_WORLD.Get_rank();
-    int lSize = COMM_WORLD.Get_size();
-
     mpi_double_int gMax;
-    Matrix pMatrix(lAI);
-    double rowPivot[pMatrix.cols()];
+    double rowPivot[lAI.cols()];
 
     for (size_t k = 0; k < iA.rows(); k++) {
-        for (size_t i = k; i < pMatrix.rows(); i++) {
-            if (fabs(pMatrix(i, k)) > gMax.value) {
-                gMax.value = fabs(pMatrix(i, k));
-                gMax.location = (int)i + lRank * pMatrix.rows();
+        gMax.value = 0;
+        gMax.location = 0;
+
+        for (size_t i = k; i < lAI.rows(); i++) {
+            if (fabs(lAI(i, k)) > gMax.value) {
+                gMax.value = fabs(lAI(i, k));
+                gMax.location = i;
             }
         }
 
-        double lValue = pMatrix(gMax.location, k);
-        for (int j = 0; j < pMatrix.cols(); j++) {
-            pMatrix(gMax.location, j) /= lValue;
-            rowPivot[j] = pMatrix(gMax.location, j);
+        double lValue = lAI(gMax.location, k);
+        for (int j = 0; j < lAI.cols(); j++) {
+            lAI(gMax.location, j) /= lValue;
+            rowPivot[j] = lAI(gMax.location, j);
         }
 
-        pMatrix.swapRows(k, gMax.location);
+        lAI.swapRows(k, gMax.location);
 
-        for (int i = 0; i < pMatrix.rows(); ++i) {
+        for (int i = 0; i < lAI.rows(); ++i) {
             if (i != k) {
-                double lValue = pMatrix(i, k);
+                double lValue = lAI(i, k);
 
-                for (int j = 0; j < pMatrix.cols(); j++) {
-                    pMatrix(i, j) -= rowPivot[j] * lValue;
+                for (int j = 0; j < lAI.cols(); j++) {
+                    lAI(i, j) -= rowPivot[j] * lValue;
                 }
             }
         }
+    }
 
-        //cout << k << lRank << "\n" << pMatrix.str() << endl;
+    for (int i = 0; i < lAI.rows(); ++i) {
+        for (int j = iA.cols(); j < lAI.cols(); ++j) {
+            iA(i, j - iA.cols()) = lAI(i, j);
+        }
     }
 }
 
@@ -257,16 +260,12 @@ int main(int argc, char** argv) {
     MPI::Init();
     int lRank = COMM_WORLD.Get_rank();
     int lSize = COMM_WORLD.Get_size();
-    bool logMatrix=false;
 
     srand((unsigned)time(NULL));
 
-    unsigned int lS = 3;
+    unsigned int lS = 5;
     if (argc >= 2) {
         lS = atoi(argv[1]);
-    }
-    if (argc == 3) {
-        logMatrix=(bool) argv[2];
     }
 
     MatrixRandom lA(lS, lS);
@@ -279,20 +278,24 @@ int main(int argc, char** argv) {
     double endPar;
 
     if (lRank == 0) {
-        if (logMatrix){
-            cout << "Matrice random:\n" << lA.str() << endl;
-        }
+        cout << "Matrice random:\n" << lA.str() << endl;
+
         cout << "---Sequential Start" << endl;
         startSeq = MPI::Wtime();
-        invertSequential(lC);
+        invertSequential2(lC);
         endSeq =MPI::Wtime();
         
+
+        cout << "Matrice inverse:\n" << lC.str() << endl;
+        
+
         Matrix lResSeq = multiplyMatrix(lA, lC);
         cout << "---Sequential End" << endl;
 
-        cout << "Erreur Parallel : " << lResSeq.getDataArray().sum() - lS << endl;
+        cout << "Erreur Sequential : " << lResSeq.getDataArray().sum() - lS << endl;
         
     }
+
     MPI_Barrier(COMM_WORLD);
     if (lRank == 0) {
         cout << "\n---Parallel Start" << endl;
@@ -304,14 +307,12 @@ int main(int argc, char** argv) {
     if (lRank == 0) {
         double endPar=MPI::Wtime();
         cout << "---Parallel End" << endl;
-        if (logMatrix){
-            cout << "Matrice inverse:\n" << lP.str() << endl;
-        }
+        cout << "Matrice inverse:\n" << lP.str() << endl;
+        
 
         Matrix lRes = multiplyMatrix(lA, lP);
-        if (logMatrix){
-            cout << "Produit des deux matrices:\n" << lRes.str() << endl;
-        }
+        cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+
         cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
 
         cout << "Time Sequential : "<< endSeq - startSeq << " , Time Parallel : "<<endPar - startPar<<endl;
